@@ -286,23 +286,19 @@ tr.avg td{font-weight:600;background:var(--surface-2)}
   <div id="fv-results" class="view" hidden></div>
 
   <div class="card">
-    <h3>Descargar datos del perfil F-V</h3>
-    <p class="small muted">Solo los datos del perfil fuerza-velocidad: parciales, F0, V0, Pmax, pendiente, RFmax, DRF, Vmax, τ, R² y orientación.</p>
+    <h3>Descargar una prueba del perfil F-V</h3>
+    <p class="small muted">Elige una evaluación y descarga una sola hoja de Excel con todos sus datos: parciales, F0 (N y N/kg), V0, Pmax (W y W/kg), pendiente F-V, RFmax, DRF, Vmax, τ, aceleración máxima, R², orientación y niveles. Esa misma hoja se importa en AVD Entrenador.</p>
     <div class="grid">
-      <label class="f" for="fvd-scope">Qué datos
-        <select id="fvd-scope">
-          <option value="cur">Evaluación actual (la que ves calculada)</option>
-          <option value="ath" selected>Todas las evaluaciones del deportista</option>
-          <option value="team">Todo el plantel</option>
-        </select></label>
+      <label class="f" for="fvd-eval">Prueba<select id="fvd-eval"></select></label>
       <label class="f" for="fvd-fmt">Formato
         <select id="fvd-fmt">
-          <option value="xfull">Excel completo (tabla, curva F-V, cargas de trineo y conclusiones)</option>
-          <option value="xtab">Excel solo tabla (para importar en AVD Entrenador)</option>
-          <option value="csv">CSV (texto separado por punto y coma)</option>
+          <option value="xtab">Excel · una hoja (para AVD Entrenador)</option>
+          <option value="xfull">Excel completo (con curva F-V, cargas y conclusiones)</option>
+          <option value="csv">CSV</option>
         </select></label>
     </div>
-    <div class="row"><button class="btn primary" id="fvd-go" type="button">Descargar perfil F-V</button><span class="small muted" id="fvd-info"></span></div>
+    <div class="row"><button class="btn primary" id="fvd-go" type="button">Descargar prueba</button><button class="btn sm" id="fvd-all" type="button">Todas las pruebas del deportista</button><button class="btn sm" id="fvd-team" type="button">Todo el plantel</button></div>
+    <p class="small muted" id="fvd-info"></p>
   </div>
 </section>
 
@@ -1642,7 +1638,10 @@ function fvSheetRows(athList,extraFor){
   const D=[...dists].sort((p,q)=>p-q);const ori={force:'Fuerza',vel:'Velocidad',bal:'Equilibrado'};
   return items.map(({a,x})=>{const s=x.sum||{},row={'Deportista':a.name,'Fecha':isoDay(x.date),'Sexo':a.sex==='F'?'F':'M','Masa (kg)':r1(a.mass),'Estatura (m)':r2(a.height)};
     D.forEach(d=>{const sp=x.splits.find(q=>q.d===d);row[`t ${d} m (s)`]=sp?r3(sp.t):'';});
-    Object.assign(row,{'F0 (N)':r1(s.F0),'F0 (N/kg)':r2(s.F0rel),'V0 (m/s)':r2(s.V0),'Pmax (W)':r1(s.Pmax),'Pmax (W/kg)':r2(s.Prel),'SFV (N.s/m)':r2(s.SFV),'RFmax (%)':r1(s.RFmax),'DRF (%.s/m)':r3(s.DRF),'Vmax (m/s)':r2(s.vmax),'Tau (s)':r3(s.tau),'R2':s.r2!=null?Math.round(s.r2*10000)/10000:'','Orientación':ori[s.orient]||'','Nota':x.note||'','Fuente':'AVD Sprint'});
+    let b={};try{b=fvAdvice({F0rel:s.F0rel,V0:s.V0,Prel:s.Prel,RFmax:s.RFmax,DRF:s.DRF,vm:s.vmax,tau:s.tau},a.sex).b||{};}catch(e){}
+    Object.assign(row,{'F0 (N)':r1(s.F0),'F0 (N/kg)':r2(s.F0rel),'V0 (m/s)':r2(s.V0),'Pmax (W)':r1(s.Pmax),'Pmax (W/kg)':r2(s.Prel),'SFV (N.s/m)':r2(s.SFV),'SFV rel (N.s/m/kg)':s.SFV!=null&&a.mass?r3(s.SFV/a.mass):'',
+      'RFmax (%)':r1(s.RFmax),'DRF (%.s/m)':r3(s.DRF),'Vmax (m/s)':r2(s.vmax),'Vmax (km/h)':s.vmax?r1(s.vmax*3.6):'','Tau (s)':r3(s.tau),'amax (m/s2)':s.vmax&&s.tau?r2(s.vmax/s.tau):'','R2':s.r2!=null?Math.round(s.r2*10000)/10000:'','Orientación':ori[s.orient]||'',
+      'Nivel F0':b.F0||'','Nivel V0':b.V0||'','Nivel Pmax':b.P||'','Nivel RFmax':b.RF||'','Nivel DRF':b.DRF||'','Nota':x.note||'','Fuente':'AVD Sprint'});
     return row;});}
 function addSheet(wb,name,rows,widths){const X=window.XLSX;const ws=rows.length?X.utils.json_to_sheet(rows):X.utils.aoa_to_sheet([['Sin datos guardados']]);
   if(rows.length){const keys=Object.keys(rows[0]);ws['!cols']=keys.map(k=>({wch:Math.max(widths||10,Math.min(42,Math.max(k.length,...rows.map(r=>String(r[k]??'').length))+2))}));ws['!autofilter']={ref:ws['!ref']};}
@@ -1843,25 +1842,31 @@ $('#par-del-test').addEventListener('click',e=>{const T=parTest();if(!T.custom)r
   parCustom=parCustom.filter(x=>x.id!==T.id);store.set('sl_partests',parCustom);b.dataset.armed='';b.textContent='Borrar la prueba elegida';parFill('fv30');});
 
 
-/* descarga solo del perfil F-V */
-function fvdInfo(){const sc=$('#fvd-scope').value;let n=0;
-  if(sc==='cur')n=fvLast?1:0;else if(sc==='ath')n=history.filter(h=>h.athleteId===currentId&&h.type==='fv').length;else n=history.filter(h=>h.type==='fv').length;
-  $('#fvd-info').textContent=sc==='cur'?(fvLast?'1 evaluación lista':'Calcula un perfil primero'):`${n} evaluaci${n===1?'ón':'ones'} guardada${n===1?'':'s'}`;}
-async function fvDownload(){const sc=$('#fvd-scope').value,fm=$('#fvd-fmt').value,a=cur();
-  let rows;
-  if(sc==='cur'){if(!fvLast)return toast('Primero calcula un perfil F-V.');rows=fvSheetRows([a],{id:a.id,r:fvLast}).slice(-1);}
-  else rows=fvSheetRows(sc==='team'?athletes:[a],null);
-  if(!rows.length)return toast(sc==='team'?'Todavía no hay perfiles F-V guardados en el plantel.':'Este deportista no tiene perfiles F-V guardados. Calcula uno y pulsa «Guardar en el historial».');
-  const tag=sc==='team'?'plantel':a.name.replace(/[^\wÀ-ÿ]+/g,'_').replace(/_+$/,''),day=isoDay(new Date());
-  if(fm==='csv'){const keys=Object.keys(rows.reduce((o,r)=>Object.assign(o,r),{}));const q=v=>{const t=String(v??'');return /[;"\n]/.test(t)?'"'+t.replace(/"/g,'""')+'"':t;};
-    const txt='﻿'+[keys.join(';'),...rows.map(r=>keys.map(k=>q(typeof r[k]==='number'?String(r[k]).replace('.',','):r[k])).join(';'))].join('\n');
-    return saveFile(`AVD-Sprint_perfil-FV_${tag}_${day}.csv`,txt);}
-  if(fm==='xfull'&&sc!=='team')return makeXLSX(['fv'],sc==='cur'?{fvCurrent:fvLast,onlyCurrent:true}:{});
-  const X=window.XLSX;if(!X)return toast('No se pudo cargar el generador de Excel.');
-  const wb=X.utils.book_new();addSheet(wb,'Perfil F-V',rows);
-  const info=X.utils.aoa_to_sheet([['Formato',XFMT],['Generado',new Date().toLocaleString('es')],['Contenido','Perfil fuerza-velocidad horizontal'],['Importar en AVD Entrenador','Progreso › Perfil fuerza-velocidad › Importar Excel de AVD Sprint']]);info['!cols']=[{wch:26},{wch:60}];X.utils.book_append_sheet(wb,info,'AVD Sprint');
-  await saveFile(`AVD-Sprint_perfil-FV_${tag}_${day}.xlsx`,new Blob([X.write(wb,{bookType:'xlsx',type:'array',compression:true})],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));}
-$('#fvd-go').addEventListener('click',fvDownload);$('#fvd-scope').addEventListener('change',fvdInfo);
+/* descarga del perfil F-V: una prueba elegida (o todas) */
+function fvdList(){const a=cur();const list=fvRowsFor(a,fvLast&&fvLast.athlete&&fvLast.athlete.id===a.id?fvLast:null);return{a,list,rows:fvSheetRows([a],fvLast&&fvLast.athlete&&fvLast.athlete.id===a.id?{id:a.id,r:fvLast}:null)};}
+function fvdInfo(){const sel=$('#fvd-eval');if(!sel)return;const {list}=fvdList(),prev=sel.value;
+  sel.innerHTML=list.length?list.map((x,i)=>{const s=x.sum||{};const d=new Date(x.date).toLocaleDateString('es',{day:'numeric',month:'short',year:'numeric'});
+    return`<option value="${i}">${x.current?'Actual (sin guardar)':d} · F0 ${fmt(s.F0rel,2)} N/kg · V0 ${fmt(s.V0,2)} m/s · Pmax ${fmt(s.Prel,1)} W/kg</option>`;}).reverse().join(''):'<option value="">No hay pruebas: calcula un perfil</option>';
+  if(prev&&[...sel.options].some(o=>o.value===prev))sel.value=prev;
+  $('#fvd-go').disabled=!list.length;$('#fvd-info').textContent=list.length?`${list.length} prueba${list.length>1?'s':''} de ${cur().name}.`:'';}
+const fvdTag=t=>String(t).replace(/[^\wÀ-ÿ]+/g,'_').replace(/_+$/,'');
+async function fvdSaveRows(rows,name){const X=window.XLSX;if(!X)return toast('No se pudo cargar el generador de Excel.');
+  const wb=X.utils.book_new();wb.Props={Title:'AVD Sprint · Perfil F-V',Subject:XFMT,Author:'AVD Sprint'};addSheet(wb,'Perfil F-V',rows);
+  await saveFile(name,new Blob([X.write(wb,{bookType:'xlsx',type:'array',compression:true})],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));}
+async function fvDownload(){const {a,list,rows}=fvdList();const i=+$('#fvd-eval').value;if(!list.length||!rows[i])return toast('Primero calcula o guarda un perfil F-V.');
+  const x=list[i],row=rows[i],fm=$('#fvd-fmt').value,base=`AVD-Sprint_perfil-FV_${fvdTag(a.name)}_${row['Fecha']}`;
+  if(fm==='csv'){const keys=Object.keys(row);const q=v=>{const t=String(v??'');return /[;"\n]/.test(t)?'"'+t.replace(/"/g,'""')+'"':t;};
+    return saveFile(base+'.csv','﻿'+keys.join(';')+'\n'+keys.map(k=>q(typeof row[k]==='number'?String(row[k]).replace('.',','):row[k])).join(';'));}
+  if(fm==='xfull'){const r=x.current?fvLast:(x.splits&&x.splits.length>=3?computeFV({ds:x.splits.map(s=>s.d),ts:x.splits.map(s=>s.t),mass:a.mass,height:a.height,T:20,Pb:760,wind:0}):null);
+    const X=window.XLSX;if(!X)return toast('No se pudo cargar el generador de Excel.');const wb=X.utils.book_new();addSheet(wb,'Perfil F-V',[row]);
+    if(r){addSheet(wb,'Curva F-V',r.pts.map(p=>({'t (s)':r2(p.t),'v (m/s)':r3(p.v),'a (m/s2)':r3(p.a),'F (N)':r1(p.F),'P (W)':r1(p.P),'RF (%)':r2(p.RF)})));
+      addSheet(wb,'Cargas trineo',[10,25,50,75].map(pp=>{const v=r.vm*(1-pp/100),F=r.F0*(1-v/r.V0)-r.k*v*v,kg=F/(0.35*G);return{'Pérdida de velocidad (%)':pp,'Velocidad objetivo (m/s)':r2(v),'Carga mu 0,35 (kg)':kg>0?r1(kg):'','% masa':kg>0?r1(kg/r.mass*100):''};}));
+      const ad=fvAdvice(r,a.sex);addSheet(wb,'Conclusiones',[...ad.c.map(t=>({'Tipo':'Conclusión','Texto':xTxt(t)})),...ad.rec.map(t=>({'Tipo':'Recomendación','Texto':xTxt(t)}))]);}
+    return saveFile(base+'_completo.xlsx',new Blob([X.write(wb,{bookType:'xlsx',type:'array',compression:true})],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));}
+  return fvdSaveRows([row],base+'.xlsx');}
+$('#fvd-go').addEventListener('click',fvDownload);
+$('#fvd-all').addEventListener('click',()=>{const {a,rows}=fvdList();if(!rows.length)return toast('Este deportista no tiene perfiles F-V.');fvdSaveRows(rows,`AVD-Sprint_perfil-FV_${fvdTag(a.name)}_todas_${isoDay(new Date())}.xlsx`);});
+$('#fvd-team').addEventListener('click',()=>{const rows=fvSheetRows(athletes,null);if(!rows.length)return toast('Todavía no hay perfiles F-V guardados en el plantel.');fvdSaveRows(rows,`AVD-Sprint_perfil-FV_plantel_${isoDay(new Date())}.xlsx`);});
 /* ===================== inicio ===================== */
 parFill();seedDemo();seedDemoV3();if(!athletes.find(a=>a.id===currentId))currentId=athletes[0].id;renderAthSel();buildTimeInputs(false);
 if(cur().id===DEMO.id){for(const d in DEMO_T){const i=$('#fv-t-'+d);if(i)i.value=DEMO_T[d];}}
