@@ -141,6 +141,7 @@ tr.avg td{font-weight:600;background:var(--surface-2)}
 
 .setup-svg{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface-2)}
 .setup-svg svg{display:block;width:100%;min-width:560px;height:auto}
+.gates-box{display:grid;gap:10px;border:1px dashed var(--line);border-radius:10px;padding:12px;background:var(--surface-2)}
 .chart-box{position:relative;height:250px;min-width:0}
 .chips{display:flex;flex-wrap:wrap;gap:6px}
 .chip{font-family:var(--f-mono);font-size:.8rem;min-height:30px;border:1px solid var(--line);border-radius:99px;padding:3px 10px;background:var(--surface-2);cursor:pointer;color:var(--ink)}
@@ -276,6 +277,35 @@ tr.avg td{font-weight:600;background:var(--surface-2)}
       </div>
       <p class="small muted">Toca el vídeo para fijar una línea vertical de referencia y alinearla con las picas.</p>
       <div class="chips" id="fv-marks"></div>
+      <div class="gates-box">
+        <div class="row" style="justify-content:space-between">
+          <h3 style="margin:0">Puertas virtuales automáticas</h3>
+          <label class="chip" for="fg-on"><input type="checkbox" id="fg-on"> Usar puertas</label>
+        </div>
+        <p class="small muted">Como Metric Sprint: coloca una puerta sobre cada cono, graba en vivo (o carga un vídeo) y la app detecta sola el paso del deportista por cada puerta. El tiempo de cada parcial se toma cuando el centro del cuerpo (cadera) cruza la puerta, con precisión menor a un cuadro.</p>
+        <div id="fg-panel" hidden>
+          <div class="grid">
+            <label class="f" for="fg-dists">Distancia de cada puerta (m)<input id="fg-dists" type="text" value="0, 5, 10, 15, 20, 30"></label>
+            <label class="f" for="fg-start">Inicio del tiempo
+              <select id="fg-start"><option value="move">Primer movimiento (como My Sprint)</option><option value="gate">Cruce de la puerta 0 m</option></select></label>
+            <label class="f" for="fg-sens">Sensibilidad <span id="fg-sens-v" class="mono">6</span><input id="fg-sens" type="range" min="1" max="10" value="6"></label>
+          </div>
+          <div class="grid">
+            <label class="f" for="fg-top">Carril: borde superior (%)<input id="fg-top" type="range" min="0" max="85" value="20"></label>
+            <label class="f" for="fg-bot">Carril: borde inferior (%)<input id="fg-bot" type="range" min="15" max="100" value="92"></label>
+          </div>
+          <p class="small muted">Arrastra el círculo de cada puerta para moverla entera, o sus extremos (arriba y abajo) para inclinarla según la perspectiva. El carril debe cubrir al deportista de la cabeza a los pies.</p>
+          <div class="row">
+            <button class="btn sm" id="fg-reset" type="button">Repartir puertas</button>
+            <button class="btn sm" id="fg-flip" type="button">Invertir sentido</button>
+            <button class="btn primary" id="fg-run" type="button">Detectar parciales</button>
+            <button class="btn sm" id="fg-stop" type="button" disabled>Detener</button>
+            <label class="chip" for="fg-auto"><input type="checkbox" id="fg-auto" checked> Detectar al terminar de grabar</label>
+          </div>
+          <div class="progress" aria-hidden="true"><i id="fg-prog"></i></div>
+          <div id="fg-res"></div>
+        </div>
+      </div>
     </div>
     <div class="row"><button class="btn primary" id="fv-calc">Calcular perfil</button><span class="small muted" id="fv-who"></span></div>
   </div>
@@ -606,11 +636,11 @@ class VideoTool{
     if(mode!=='import'){const f=liveFps||this.fileFps;this.capFps=Math.round(f);$('.vt-cap',this.root).value=this.capFps;
       if(mode==='live'&&liveFps){this.fileFps=liveFps;$('.vt-ffps',this.root).value=liveFps;this.updateCount();}
       toast(`Vídeo grabado a ${this.capFps} fps.${this.capFps<200?' Para 240 fps graba en cámara lenta del teléfono e impórtalo.':''}`);}
-    this.frame=0;await this.goto(0);this.o.onLoad&&this.o.onLoad();
+    this.frame=0;await this.goto(0);this.o.onLoad&&this.o.onLoad(mode);
   }
-  nativeRecord(){const id=uid();nativeCbs[id]=async res=>{if(!res)return;toast('Cargando vídeo…');
+  nativeRecord(){const id=uid();nativeCbs[id]=async res=>{if(!res)return;if(res.gates&&this.o.onNativeGates)this.o.onNativeGates(res.gates);toast('Cargando vídeo…');
       try{const b=await (await fetch(res.url)).blob();await this.load(new File([b],res.name,{type:'video/mp4'}),'live',res.fps);}catch(e){toast('No se pudo abrir la grabación.');}};
-    try{window.AVDNative.record(id);}catch(e){delete nativeCbs[id];toast('No se pudo abrir la cámara.');}}
+    try{const g=this.o.nativeGates&&this.o.nativeGates();if(g&&window.AVDNative.recordGates)window.AVDNative.recordGates(id,JSON.stringify(g));else window.AVDNative.record(id);}catch(e){delete nativeCbs[id];toast('No se pudo abrir la cámara.');}}
   async openCam(deviceId){
     const base=deviceId?{deviceId:{exact:deviceId}}:{facingMode:{ideal:'environment'}};
     const tries=[{frameRate:{exact:240},width:{ideal:1280},height:{ideal:720}},{frameRate:{exact:240}},{frameRate:{min:200}},{frameRate:{min:120},width:{ideal:1280},height:{ideal:720}},{frameRate:{min:100}},{frameRate:{ideal:240},width:{ideal:1280},height:{ideal:720}}];
@@ -671,8 +701,8 @@ class VideoTool{
     const times=[];v.currentTime=0;
     await new Promise(res=>{let done=false;const fin=()=>{if(done)return;done=true;res();};
       const cb=(now,meta)=>{times.push(meta.mediaTime);if(times.length<40&&!done)v.requestVideoFrameCallback(cb);else fin();};
-      v.requestVideoFrameCallback(cb);v.playbackRate=1;v.play().catch(fin);setTimeout(fin,2500);});
-    v.pause();
+      v.requestVideoFrameCallback(cb);v.playbackRate=0.125;v.play().catch(fin);setTimeout(fin,4000);});
+    v.pause();v.playbackRate=1;
     const d=[];for(let i=1;i<times.length;i++){const x=times[i]-times[i-1];if(x>1e-4)d.push(x);}
     if(d.length<4){if(!silent)toast('No se pudo detectar: escribe los fps del archivo.');return;}
     d.sort((a,b)=>a-b);const q=d[Math.floor(d.length*0.15)];let fps=1/q;
@@ -747,12 +777,133 @@ $('#fv-m-manual').addEventListener('click',()=>fvMode('manual'));$('#fv-m-video'
 
 const fvVT=new VideoTool($('#fv-vt'),{id:'fvvt',hint:HINT,
   onDraw(ctx,vt){const u=vt.u;
-    if(fvRefX!=null){ctx.save();ctx.strokeStyle='#FF3B3B';ctx.lineWidth=2*u;ctx.setLineDash([10*u,6*u]);ctx.beginPath();ctx.moveTo(fvRefX,0);ctx.lineTo(fvRefX,vt.h);ctx.stroke();ctx.restore();}
+    if(fvG.on){drawGates(ctx,vt);}
+    else if(fvRefX!=null){ctx.save();ctx.strokeStyle='#FF3B3B';ctx.lineWidth=2*u;ctx.setLineDash([10*u,6*u]);ctx.beginPath();ctx.moveTo(fvRefX,0);ctx.lineTo(fvRefX,vt.h);ctx.stroke();ctx.restore();}
     let lab=null;if(fvMarks.start===vt.frame)lab='INICIO';fvMarks.splits.forEach(s=>{if(s.frame===vt.frame)lab=s.d+' m';});
     if(fvMarks.start!=null&&vt.frame>=fvMarks.start){ctx.font=`600 ${22*u}px "IBM Plex Mono",monospace`;ctx.fillStyle='rgba(0,0,0,.6)';ctx.fillRect(8*u,8*u,190*u,34*u);ctx.fillStyle='#fff';ctx.fillText('t '+((vt.frame-fvMarks.start)/vt.capFps).toFixed(3)+' s',16*u,33*u);}
     if(lab){ctx.font=`700 ${26*u}px "Barlow Condensed",sans-serif`;ctx.fillStyle='#FF3B3B';ctx.fillRect(vt.w-150*u,8*u,142*u,36*u);ctx.fillStyle='#fff';ctx.fillText(lab,vt.w-140*u,35*u);}},
-  onPointer(t,x){if(t!=='up'){fvRefX=x;fvVT.redraw();}},
+  onPointer(t,x,y){if(fvG.on){gatePointer(t,x,y);return;}if(t!=='up'){fvRefX=x;fvVT.redraw();}},
+  nativeGates(){return fvG.on?{gates:fvG.gates,top:fvG.top,bot:fvG.bot}:null;},
+  onNativeGates(g){try{if(g&&Array.isArray(g.gates)&&g.gates.length){fvG.gates=g.gates;fvG.top=g.top;fvG.bot=g.bot;$('#fg-top').value=Math.round(g.top*100);$('#fg-bot').value=Math.round(g.bot*100);}}catch(e){}},
+  onLoad(mode){if(fvG.on){if(!fvG.gates.length)gatesReset();fvG.result=null;gatesUI();if(mode!=='import'&&$('#fg-auto').checked)setTimeout(()=>gatesRun(),300);}},
   onFps(){fvMarkUI();}});
+
+/* ===================== PUERTAS VIRTUALES (detección automática de parciales) ===================== */
+const fvG={on:false,gates:[],top:0.20,bot:0.92,drag:null,running:false,result:null,dir:0};
+const GCOL=['#F2F4F7','#F2C200','#2E7BFF','#36E37A','#FF4D4F','#B47CFF','#FF9F1A','#2FD0FF'];
+function gateDists(){return [...new Set($('#fg-dists').value.split(/[,;\s]+/).map(Number).filter(v=>Number.isFinite(v)&&v>=0))].sort((a,b)=>a-b);}
+function gatesReset(){const ds=gateDists();if(ds.length<2){toast('Escribe al menos dos distancias de puerta (p. ej. 0, 5, 10).');return;}
+  const max=ds[ds.length-1],min=ds[0],L=0.08,Rr=0.92,flip=fvG.dir<0;
+  fvG.gates=ds.map(d=>{const f=(d-min)/(max-min||1);const x=flip?Rr-f*(Rr-L):L+f*(Rr-L);return{d,xt:x,xb:x};});fvG.result=null;gatesUI();fvVT.redraw();}
+function gX(g,yN){const k=(yN-fvG.top)/((fvG.bot-fvG.top)||1);return g.xt+(g.xb-g.xt)*k;}
+function drawGates(ctx,vt){const u=vt.u,W=vt.w,H=vt.h,yt=fvG.top*H,yb=fvG.bot*H;
+  ctx.save();ctx.fillStyle='rgba(0,0,0,.28)';ctx.fillRect(0,0,W,yt);ctx.fillRect(0,yb,W,H-yb);
+  const res=fvG.result;
+  fvG.gates.forEach((g,i)=>{const x1=g.xt*W,x2=g.xb*W;
+    const hit=res&&res.cross&&res.cross[i]&&Math.abs(res.cross[i].f-vt.frame)<1;
+    ctx.strokeStyle=hit?'#36E37A':'#FFD200';ctx.lineWidth=(hit?5:3)*u;ctx.beginPath();ctx.moveTo(x1,yt);ctx.lineTo(x2,yb);ctx.stroke();
+    ctx.fillStyle='#FFD200';[[x1,yt],[x2,yb]].forEach(([x,y])=>{ctx.beginPath();ctx.arc(x,y,7*u,0,7);ctx.fill();});
+    const cx=(x1+x2)/2,cy=yb-34*u;ctx.fillStyle='rgba(13,110,70,.92)';ctx.beginPath();ctx.arc(cx,cy,22*u,0,7);ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=2*u;ctx.stroke();
+    ctx.fillStyle='#fff';ctx.font=`700 ${15*u}px "Barlow Condensed",sans-serif`;ctx.textAlign='center';ctx.fillText(g.d+' m',cx,cy+5*u);
+    if(res&&res.cross&&res.cross[i]&&res.cross[i].t!=null){ctx.font=`600 ${14*u}px "IBM Plex Mono",monospace`;const tx=res.cross[i].t.toFixed(3)+' s';const w=ctx.measureText(tx).width+10*u;ctx.fillStyle='rgba(0,0,0,.7)';ctx.fillRect(cx-w/2,yt+6*u,w,22*u);ctx.fillStyle='#fff';ctx.fillText(tx,cx,yt+22*u);}
+    ctx.textAlign='left';});
+  if(res&&res.track){const f=vt.frame,p=res.track[f];if(p){ctx.fillStyle='rgba(54,227,122,.95)';ctx.strokeStyle='#fff';ctx.lineWidth=2*u;ctx.beginPath();ctx.arc(p.x*W,p.y*H,9*u,0,7);ctx.fill();ctx.stroke();}
+    if(res.startF!=null&&f>=res.startF){ctx.font=`600 ${22*u}px "IBM Plex Mono",monospace`;const s=((f-res.startF)/vt.capFps).toFixed(3)+' s';ctx.fillStyle='rgba(0,0,0,.6)';ctx.fillRect(8*u,8*u,ctx.measureText(s).width+20*u,34*u);ctx.fillStyle='#fff';ctx.fillText(s,18*u,33*u);}}
+  if(fvVT.lv){ctx.font=`700 ${20*u}px "Barlow Condensed",sans-serif`;const m='Alinea cada puerta con su cono y graba';const w=ctx.measureText(m).width+20*u;ctx.fillStyle='rgba(0,0,0,.55)';ctx.fillRect(W/2-w/2,H-30*u,w,26*u);ctx.fillStyle='#fff';ctx.textAlign='center';ctx.fillText(m,W/2,H-11*u);ctx.textAlign='left';}
+  ctx.restore();}
+function gatePointer(t,x,y){const vt=fvVT,W=vt.w,H=vt.h,u=vt.u;
+  if(t==='down'){let best=null,bd=40*u;fvG.gates.forEach((g,i)=>{const pts=[['t',g.xt*W,fvG.top*H],['b',g.xb*W,fvG.bot*H],['m',(g.xt+g.xb)/2*W,fvG.bot*H-34*u]];
+      pts.forEach(([k,px,py])=>{const d=Math.hypot(px-x,py-y);if(d<bd){bd=d;best={i,k,x0:x,g0:{...g}};}});});
+    if(!best){fvG.gates.forEach((g,i)=>{const yN=y/H;if(yN>=fvG.top&&yN<=fvG.bot){const d=Math.abs(gX(g,yN)*W-x);if(d<bd){bd=d;best={i,k:'m',x0:x,g0:{...g}};}}});}
+    fvG.drag=best;return;}
+  if(t==='move'&&fvG.drag){const D=fvG.drag,g=fvG.gates[D.i],dx=(x-D.x0)/W,cl=v=>Math.min(.999,Math.max(.001,v));
+    if(D.k==='t')g.xt=cl(x/W);else if(D.k==='b')g.xb=cl(x/W);else{g.xt=cl(D.g0.xt+dx);g.xb=cl(D.g0.xb+dx);}
+    fvG.result=null;fvVT.redraw();return;}
+  if(t==='up'){fvG.drag=null;gatesUI();}}
+function gatesUI(){$('#fg-panel').hidden=!fvG.on;const r=fvG.result,el=$('#fg-res');
+  if(!r||!r.cross||!r.cross.length||r.startF==null){el.innerHTML=fvG.on?`<p class="small muted">${fvG.gates.length} puertas: ${fvG.gates.map(g=>g.d+' m').join(' · ')}. ${fvVT.nFrames?'Pulsa «Detectar parciales».':'Graba en vivo o carga un vídeo.'}</p>`:'';return;}
+  const ok=r.splits.length>=3;
+  el.innerHTML=`<div class="tbl-wrap"><table><thead><tr><th>Puerta</th><th class="n">Cuadro</th><th class="n">Tiempo (s)</th><th class="n">Parcial (s)</th><th class="n">Vel. tramo (m/s)</th></tr></thead><tbody>
+   <tr><td>Inicio · ${r.startMode==='move'?'primer movimiento':'cruce de la puerta inicial'}</td><td class="n"><button class="chip" data-g="${Math.round(r.startF)}">${fmt(r.startF,1)}</button></td><td class="n">0.000</td><td></td><td></td></tr>
+   ${r.cross.map((c,i)=>{const g=fvG.gates[i];if(!c||c.t==null)return`<tr><td>${g.d} m</td><td class="n" colspan="4">no detectado</td></tr>`;
+     const prev=r.cross.map((q,j)=>({q,j})).filter(o=>o.q&&o.q.t!=null&&fvG.gates[o.j].d<g.d&&(r.startMode!=='move'||fvG.gates[o.j].d>0)).sort((a,b)=>fvG.gates[b.j].d-fvG.gates[a.j].d)[0];
+     const pd=prev?fvG.gates[prev.j].d:0,pt=prev?Math.max(0,prev.q.t):0;
+     return`<tr><td>${g.d} m</td><td class="n"><button class="chip" data-g="${Math.round(c.f)}">${fmt(c.f,1)}</button></td><td class="n"><b>${c.t.toFixed(3)}</b></td><td class="n">${c.t>0?(c.t-pt).toFixed(3):'—'}</td><td class="n">${c.t>pt&&g.d>pd?fmt((g.d-pd)/(c.t-pt),2):'—'}</td></tr>`;}).join('')}
+   </tbody></table></div>
+   <p class="small muted">${r.note}</p>
+   <div class="row"><button class="btn lane" id="fg-use" ${ok?'':'disabled'}>Usar estos parciales y calcular el perfil</button></div>`;
+  $$('#fg-res [data-g]').forEach(b=>b.addEventListener('click',()=>fvVT.goto(+b.dataset.g)));
+  const u=$('#fg-use');if(u)u.addEventListener('click',()=>{const sp=r.splits;$('#fv-dists').value=sp.map(s=>s.d).join(',');$('#fv-preset').value='custom';fvDists=sp.map(s=>s.d);buildTimeInputs(false);
+    sp.forEach(s=>{const i=$('#fv-t-'+s.d);if(i)i.value=s.t.toFixed(3);});fvMode('manual');fvMarkUI();drawSetup();fvCalc();toast('Parciales cargados: perfil calculado.');});}
+$('#fg-on').addEventListener('change',e=>{fvG.on=e.target.checked;if(fvG.on&&!fvG.gates.length)gatesReset();gatesUI();fvVT.redraw();});
+$('#fg-dists').addEventListener('change',()=>gatesReset());
+$('#fg-reset').addEventListener('click',()=>gatesReset());
+$('#fg-flip').addEventListener('click',()=>{fvG.dir=fvG.dir<0?1:-1;gatesReset();});
+$('#fg-sens').addEventListener('input',e=>$('#fg-sens-v').textContent=e.target.value);
+$('#fg-top').addEventListener('input',e=>{fvG.top=Math.min(+e.target.value/100,fvG.bot-0.1);fvG.result=null;fvVT.redraw();});
+$('#fg-bot').addEventListener('input',e=>{fvG.bot=Math.max(+e.target.value/100,fvG.top+0.1);fvG.result=null;fvVT.redraw();});
+$('#fg-stop').addEventListener('click',()=>{fvG.running=false;});
+$('#fg-run').addEventListener('click',()=>gatesRun());
+
+/* Algoritmo: fondo = mediana temporal de cuadros repartidos en todo el vídeo (el deportista se mueve y desaparece de la mediana).
+   En cada cuadro, máscara del cuerpo dentro del carril -> bloque principal -> centro (aprox. cadera). El cruce de cada puerta se
+   interpola entre los dos cuadros que lo rodean (precisión sub-cuadro). Inicio: primer movimiento del centro o cruce de la puerta inicial. */
+async function gatesRun(){
+  const vt=fvVT;if(!vt.nFrames)return toast('Primero graba o carga un vídeo.');if(fvG.gates.length<2)return toast('Coloca al menos dos puertas.');
+  if(fvG.running)return;fvG.running=true;$('#fg-run').disabled=true;$('#fg-stop').disabled=false;const prog=$('#fg-prog');
+  const back=vt.frame,N=vt.nFrames,aw=Math.min(320,vt.w),ah=Math.max(40,Math.round(vt.h*aw/vt.w));
+  const oc=document.createElement('canvas');oc.width=aw;oc.height=ah;const ox=oc.getContext('2d',{willReadFrequently:true});
+  const y0=Math.max(0,Math.floor(fvG.top*ah)),y1=Math.min(ah-1,Math.ceil(fvG.bot*ah)),bh=y1-y0+1;
+  const gray=()=>{ox.drawImage(vt.raw,0,0,aw,ah);const d=ox.getImageData(0,y0,aw,bh).data,g=new Uint8Array(aw*bh);for(let i=0,j=0;i<g.length;i++,j+=4)g[i]=(d[j]*77+d[j+1]*150+d[j+2]*29)>>8;return g;};
+  try{
+    const K=Math.min(21,Math.max(9,Math.floor(N/15))),samples=[];
+    for(let k=0;k<K&&fvG.running;k++){await vt.seek(Math.round((k+0.5)*(N-1)/K));samples.push(gray());prog.style.width=(k/K*15)+'%';}
+    const bg=new Uint8Array(aw*bh),col=new Uint8Array(K);
+    for(let p=0;p<bg.length;p++){for(let k=0;k<K;k++)col[k]=samples[k][p];col.sort();bg[p]=col[K>>1];}
+    const thr=60-(+$('#fg-sens').value)*4.5,minCol=Math.max(2,Math.round(bh*0.06)),track=new Array(N).fill(null);
+    fvG.result={track,cross:[],splits:[],startF:null};
+    for(let f=0;f<N&&fvG.running;f++){await vt.seek(f);const g=gray(),cnt=new Float32Array(aw),rowS=new Float32Array(aw);
+      for(let y=0;y<bh;y++){const o=y*aw;for(let x=0;x<aw;x++){if(Math.abs(g[o+x]-bg[o+x])>thr){cnt[x]++;rowS[x]+=y;}}}
+      let best=null,cur=null,gap=0;for(let x=0;x<=aw;x++){const on=x<aw&&cnt[x]>=minCol;
+        if(on){if(!cur)cur={a:x,b:x,s:0};cur.b=x;cur.s+=cnt[x];gap=0;}else if(cur){gap++;if(gap>3||x===aw){if(!best||cur.s>best.s)best=cur;cur=null;gap=0;}}}
+      if(best&&best.s>=bh*aw*0.004&&(best.b-best.a)<aw*0.45){let sx=0,sy=0,sn=0;for(let x=best.a;x<=best.b;x++){sx+=x*cnt[x];sy+=rowS[x];sn+=cnt[x];}
+        track[f]={x:(sx/sn+0.5)/aw,y:(y0+sy/sn+0.5)/ah,n:sn};}
+      if(f%6===0){prog.style.width=(15+f/N*85)+'%';await nextFrame();}}
+    if(!fvG.running)throw new Error('cancelado');
+    const xs=track.map(p=>p?p.x:null);for(let f=1;f<N-1;f++){const a=xs[f-1],b=xs[f],c=xs[f+1];if(a!=null&&b!=null&&c!=null&&track[f])track[f]={...track[f],x:[a,b,c].sort((p,q)=>p-q)[1]};}
+    const order=fvG.gates.map((g,i)=>({g,i})).sort((a,b)=>a.g.d-b.g.d);const yMid=(fvG.top+fvG.bot)/2;
+    const dir=Math.sign(gX(order[order.length-1].g,yMid)-gX(order[0].g,yMid))||1;
+    const cross=new Array(fvG.gates.length).fill(null);let from=0;
+    for(const {g,i} of order){let hit=null,prevF=null,prevS=null;
+      for(let f=from;f<N;f++){const p=track[f];if(!p)continue;const s=(p.x-gX(g,p.y))*dir;
+        if(prevS!=null&&prevS<0&&s>=0&&f-prevF<=Math.max(3,vt.capFps*0.05)){hit=prevF+(0-prevS)/(s-prevS)*(f-prevF);break;}
+        prevF=f;prevS=s;}
+      if(hit!=null){cross[i]={f:hit};from=Math.floor(hit);}}
+    const mode=$('#fg-start').value,g0=order[0],firstPos=order.find(o=>o.g.d>g0.g.d&&cross[o.i]);let startF=null,note='';
+    if(mode==='gate'){if(cross[g0.i])startF=cross[g0.i].f;else note='No se detectó el cruce de la puerta inicial; se usó el primer movimiento. ';}
+    if(startF==null){const pxPerM=Math.abs(gX(order[order.length-1].g,yMid)-gX(g0.g,yMid))/((order[order.length-1].g.d-g0.g.d)||1);
+      const lim=firstPos?Math.floor(cross[firstPos.i].f):N-1;const pre=[];for(let f=0;f<=lim&&pre.length<Math.max(8,Math.round(vt.capFps*0.15));f++)if(track[f])pre.push(track[f].x);
+      if(pre.length>=3){const rest=pre.slice().sort((a,b)=>a-b)[pre.length>>1];let mv=null;
+        for(let f=0;f<=lim;f++){const p=track[f];if(p&&(p.x-rest)*dir>0.15*pxPerM){mv=f;break;}}
+        if(mv!=null){
+          // Inicio por ajuste: al arrancar, la cadera avanza como a·t²/2, así que la raíz del desplazamiento crece en línea recta
+          // desde el instante de salida. Se ajusta esa recta entre 0,05 y 0,6 m y se extrapola a desplazamiento cero.
+          const P=[];for(let f=0;f<=lim;f++){const p=track[f];if(!p)continue;const dm=(p.x-rest)*dir/pxPerM;if(dm>=0.05&&dm<=0.6)P.push([f,Math.sqrt(dm)]);if(dm>0.6)break;}
+          let fit=null;if(P.length>=4){const lr=linreg(P.map(q=>q[0]),P.map(q=>q[1]));if(lr.m>0&&lr.r2>0.9)fit=-lr.b/lr.m;}
+          let f=mv;while(f>0){const p=track[f-1];if(p&&(p.x-rest)*dir<=0.02*pxPerM)break;f--;}
+          startF=fit!=null&&fit<=f&&fit>=f-vt.capFps*0.3?fit:f;}}
+      if(startF==null){if(cross[g0.i]){startF=cross[g0.i].f;note+='No se vio al deportista quieto antes de salir: el tiempo empieza en la puerta inicial. ';}
+        else{startF=0;note+='No se pudo detectar el inicio: revisa el vídeo. ';}}}
+    cross.forEach(c=>{if(c)c.t=(c.f-startF)/vt.capFps;});
+    const splits=order.filter(o=>o.g.d>0&&cross[o.i]&&cross[o.i].t>0).map(o=>({d:o.g.d,t:cross[o.i].t}));
+    const miss=order.filter(o=>!cross[o.i]&&!(mode==='move'&&o.g.d===g0.g.d)).map(o=>o.g.d+' m');
+    note+=miss.length?`Sin detectar: ${miss.join(', ')}. Ajusta las puertas, el carril o la sensibilidad y vuelve a detectar. `:'Todas las puertas detectadas. ';
+    note+=`Resolución: ${fmt(1000/vt.capFps,1)} ms por cuadro (${vt.capFps} fps), con interpolación entre cuadros.`;
+    fvG.result={track,cross,splits,startF,startMode:mode,note};
+    toast(splits.length>=3?`Parciales: ${splits.map(s=>s.d+' m '+s.t.toFixed(2)+' s').join(' · ')}`:'Se detectaron menos de 3 parciales.');
+  }catch(e){if(String(e&&e.message)!=='cancelado')toast('No se pudo analizar: '+(e&&e.message||e));}
+  fvG.running=false;$('#fg-run').disabled=false;$('#fg-stop').disabled=true;prog.style.width='100%';gatesUI();await vt.goto(back);
+}
 function fvMarkUI(){const n=fvMarks.splits.length;const nd=fvDists[n];
   $('#fv-mark-split').textContent=nd!=null?`Marcar parcial ${nd} m`:'Parciales completos';$('#fv-mark-split').disabled=nd==null||fvMarks.start==null;
   const cap=fvVT.capFps;let h='';if(fvMarks.start!=null)h+=`<button class="chip on" data-f="${fvMarks.start}">Inicio · cuadro ${fvMarks.start}</button>`;

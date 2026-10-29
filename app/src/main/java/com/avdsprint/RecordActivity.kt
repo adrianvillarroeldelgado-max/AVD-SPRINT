@@ -52,6 +52,8 @@ class RecordActivity : BaseActivity() {
     companion object {
         const val EX_FILE = "file"
         const val EX_FPS = "fps"
+        /** Puertas virtuales (JSON {gates:[{d,xt,xb}],top,bot} en fracciones de la imagen). */
+        const val EX_GATES = "gates"
         private const val RQ_PERM = 7
     }
 
@@ -75,6 +77,7 @@ class RecordActivity : BaseActivity() {
     private var starting = false
     private var outFile: File? = null
     private var startMs = 0L
+    private var gatesView: GatesView? = null
 
     private val tick = object : Runnable {
         override fun run() {
@@ -92,7 +95,10 @@ class RecordActivity : BaseActivity() {
         val root = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
         texture = AutoFitTextureView(this)
         root.addView(texture, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
-        root.addView(GuideView(this), FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        val gatesJson = intent.getStringExtra(EX_GATES)
+        val gv = gatesJson?.let { GatesView.fromJson(this, it, texture) }
+        gatesView = gv
+        root.addView(gv ?: GuideView(this), FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
 
         clock = text("", 20f, 0xFFFFFFFF.toInt(), true).apply {
             setShadowLayer(6f, 0f, 0f, Color.BLACK)
@@ -445,7 +451,9 @@ class RecordActivity : BaseActivity() {
             startPreview()
             return
         }
-        setResult(RESULT_OK, Intent().putExtra(EX_FILE, f.absolutePath).putExtra(EX_FPS, c.fps))
+        val res = Intent().putExtra(EX_FILE, f.absolutePath).putExtra(EX_FPS, c.fps)
+        gatesView?.let { res.putExtra(EX_GATES, it.toJson()) }
+        setResult(RESULT_OK, res)
         finish()
     }
 

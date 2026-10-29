@@ -232,10 +232,15 @@ class MainActivity : BaseActivity() {
             runOnUiThread { Updater.check(this@MainActivity, true) }
         }
 
-        @JavascriptInterface fun record(id: String) {
+        @JavascriptInterface fun record(id: String) = recordGates(id, null)
+
+        /** Graba en cámara lenta mostrando las puertas virtuales del perfil F-V (JSON de la página). */
+        @JavascriptInterface fun recordGates(id: String, gatesJson: String?) {
             runOnUiThread {
                 recordId = id
-                startActivityForResult(Intent(this@MainActivity, RecordActivity::class.java), RQ_RECORD)
+                val i = Intent(this@MainActivity, RecordActivity::class.java)
+                if (!gatesJson.isNullOrBlank()) i.putExtra(RecordActivity.EX_GATES, gatesJson)
+                startActivityForResult(i, RQ_RECORD)
             }
         }
 
@@ -271,7 +276,9 @@ class MainActivity : BaseActivity() {
                 if (resultCode == RESULT_OK && path != null) {
                     val name = File(path).name
                     val fps = data?.getIntExtra(RecordActivity.EX_FPS, 0) ?: 0
-                    js("window.AVDNativeCb&&AVDNativeCb(${JSONObject.quote(id)},{url:'/videos/'+${JSONObject.quote(Uri.encode(name))},name:${JSONObject.quote(name)},fps:$fps})")
+                    // Las puertas vienen de GatesView.toJson() (JSON válido generado en la app).
+                    val gates = data?.getStringExtra(RecordActivity.EX_GATES)?.let { g -> try { JSONObject(g).toString() } catch (_: Exception) { null } } ?: "null"
+                    js("window.AVDNativeCb&&AVDNativeCb(${JSONObject.quote(id)},{url:'/videos/'+${JSONObject.quote(Uri.encode(name))},name:${JSONObject.quote(name)},fps:$fps,gates:$gates})")
                 } else {
                     js("window.AVDNativeCb&&AVDNativeCb(${JSONObject.quote(id)},null)")
                 }
