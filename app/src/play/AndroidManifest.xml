@@ -1,0 +1,3 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Versión de Google Play: funciona sin internet; Play se encarga de las actualizaciones. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" />
