@@ -4,7 +4,8 @@ App de evaluación de la velocidad para entrenadores, con la misma imagen y el m
 
 ## Qué hace
 
-- **1 · Deportistas:** plantel, informe completo, informes PDF (una o todas las pruebas), historial, exportación CSV y copia de seguridad.
+- **1 · Deportistas:** plantel, informe completo, informes PDF y Excel (una o todas las pruebas, o el perfil F-V de todo el plantel), historial, exportación CSV y copia de seguridad.
+- **Excel para AVD Entrenador:** la hoja «Perfil F-V» (deportista, fecha, masa y parciales «t 5 m (s)»…) se importa en AVD Entrenador › Progreso › Perfil fuerza-velocidad › Importar Excel de AVD Sprint.
 - **2 · Perfil fuerza-velocidad horizontal** (método de Samozino, como My Sprint): parciales desde vídeo a 240 fps o a mano, F0, V0, Pmax, pendiente F-V, RFmax, DRF, Vmax y τ, gráficos, conclusiones, recomendaciones, plan de 6–9 semanas y cargas de trineo. Esquema de colocación de picas con corrección de paralaje desde el punto de paneo.
 - **3 · Biomecánica de carrera** (tipo Kinovea): esqueleto manual o con seguimiento automático de marcadores, ángulos articulares, ángulo libre, kinograma de 5 posiciones con alertas técnicas, tiempo de contacto, vuelo, longitud y frecuencia de paso, y velocidad A–B calibrada.
 - **4 · Fotocélula por vídeo** (tipo Photo Finish): línea vertical que detecta el primer cuadro en que el cuerpo la cruza, a la ida y a la vuelta. 5-0-5, 10-0-10, 5-10-5, T-Test, ida y vuelta, sprint y pruebas personalizadas, con déficit de cambio de dirección.

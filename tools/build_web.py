@@ -4,7 +4,7 @@
 Toma web/index.html (la misma página que el artifact de Claude) y genera
 app/src/main/assets/www/index.html para que funcione sin internet:
 - agrega la cabecera HTML completa (el artifact la recibe del visor),
-- cambia las librerías de cdnjs por copias locales en lib/,
+- cambia las librerías de cdnjs (Chart.js, jsPDF, SheetJS) por copias locales en lib/,
 - cambia Google Fonts por las fuentes incluidas en lib/fonts.
 """
 import pathlib
@@ -21,6 +21,7 @@ SCRIPTS = {
     "https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js": "lib/chart.umd.js",
     "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js": "lib/jspdf.umd.min.js",
     "https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js": "lib/jspdf.plugin.autotable.min.js",
+    "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js": "lib/xlsx.full.min.js",
 }
 
 FONTS = [

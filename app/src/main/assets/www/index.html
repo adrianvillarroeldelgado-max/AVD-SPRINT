@@ -362,7 +362,7 @@ tr.avg td{font-weight:600;background:var(--surface-2)}
     <div class="chips" id="bio-kchips"></div>
     <div id="bio-kout"></div>
   </div>
-  <div class="row"><button class="btn lane" id="bio-save">Guardar análisis en el historial</button><button class="btn primary" id="bio-pdf">Informe PDF de biomecánica</button></div>
+  <div class="row"><button class="btn lane" id="bio-save">Guardar análisis en el historial</button><button class="btn primary" id="bio-pdf">Informe PDF de biomecánica</button><button class="btn" id="bio-xlsx">Excel de biomecánica</button></div>
 </section>
 
 <!-- ================= 3. FOTOCÉLULA ================= -->
@@ -411,7 +411,7 @@ tr.avg td{font-weight:600;background:var(--surface-2)}
     <h2>Progreso</h2>
     <p>Compara las evaluaciones del deportista en el tiempo, módulo por módulo: qué mejoró, qué empeoró, qué se mantiene y la retroalimentación de cada evaluación.</p>
   </div>
-  <div class="row"><button class="btn primary" id="prog-pdf">Informe PDF de progreso</button></div>
+  <div class="row"><button class="btn primary" id="prog-pdf">Informe PDF de progreso</button><button class="btn" id="prog-xlsx">Excel de progreso</button></div>
   <div id="prog-out" class="view"></div>
 </section>
 
@@ -430,15 +430,16 @@ tr.avg td{font-weight:600;background:var(--surface-2)}
     <div class="row"><span id="app-ver" class="mono small"></span><button class="btn sm" id="app-upd" type="button">Buscar actualizaciones</button></div>
   </div>
   <div class="card">
-    <h3>Informes PDF</h3>
-    <p class="small muted">Elige qué pruebas incluir. El informe usa las últimas evaluaciones guardadas del deportista, con tablas, gráficos, conclusiones y recomendaciones.</p>
+    <h3>Informes PDF y Excel</h3>
+    <p class="small muted">Elige qué pruebas incluir. El PDF usa las últimas evaluaciones guardadas del deportista. El Excel trae todas sus evaluaciones, una hoja por prueba, listo para importar en AVD Entrenador.</p>
     <div class="row" role="group" aria-label="Pruebas del informe">
       <label class="chip" for="pdf-fv"><input type="checkbox" id="pdf-fv" checked> Perfil F-V</label>
       <label class="chip" for="pdf-bio"><input type="checkbox" id="pdf-bio" checked> Biomecánica</label>
       <label class="chip" for="pdf-pc"><input type="checkbox" id="pdf-pc" checked> Fotocélula</label>
       <label class="chip" for="pdf-prog"><input type="checkbox" id="pdf-prog" checked> Progreso</label>
     </div>
-    <div class="row"><button class="btn primary" id="pdf-sel">Informe de las pruebas elegidas</button><button class="btn" id="pdf-all">Informe completo (todas)</button></div>
+    <div class="row"><button class="btn primary" id="pdf-sel">PDF de las pruebas elegidas</button><button class="btn" id="pdf-all">PDF completo (todas)</button></div>
+    <div class="row"><button class="btn lane" id="xlsx-sel">Excel de las pruebas elegidas</button><button class="btn" id="xlsx-all">Excel completo (todas)</button><button class="btn" id="xlsx-team">Excel del perfil F-V de todo el plantel</button></div>
   </div>
   <div class="card">
     <h3 id="ath-form-t">Nuevo deportista</h3>
@@ -467,6 +468,7 @@ tr.avg td{font-weight:600;background:var(--surface-2)}
 <script src="lib/chart.umd.js"></script>
 <script src="lib/jspdf.umd.min.js"></script>
 <script src="lib/jspdf.plugin.autotable.min.js"></script>
+<script src="lib/xlsx.full.min.js"></script>
 <script>
 /* ===================== utilidades ===================== */
 const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
@@ -920,11 +922,12 @@ function renderFV(r){
     <div id="fv-sled"></div>
     <p class="small muted">Carga para mantener cada velocidad objetivo según el perfil del deportista. μ ≈ 0,30 en pista sintética, 0,35–0,40 en césped artificial, ≈ 0,45 en césped natural. Valida con una prueba real de velocidad.</p>
   </div>
-  <div class="row"><button class="btn lane" id="fv-save">Guardar en el historial</button><button class="btn" id="fv-csv">Descargar resultados (CSV)</button><button class="btn primary" id="fv-pdf">Informe PDF</button></div>`;
+  <div class="row"><button class="btn lane" id="fv-save">Guardar en el historial</button><button class="btn" id="fv-csv">Descargar resultados (CSV)</button><button class="btn primary" id="fv-pdf">Informe PDF</button><button class="btn" id="fv-xlsx">Excel</button></div>`;
   const sled=()=>{const mu=+$('#fv-mu').value||0.35;$('#fv-sled').innerHTML=`<div class="tbl-wrap"><table><thead><tr><th>Pérdida de velocidad</th><th class="n">Velocidad objetivo</th><th class="n">Carga (kg)</th><th class="n">% masa</th><th>Uso</th></tr></thead><tbody>${[[10,'Velocidad · técnica'],[25,'Fuerza a alta velocidad'],[50,'Potencia máxima'],[75,'Fuerza en aceleración']].map(([p,use])=>{const v=r.vm*(1-p/100);const F=r.F0*(1-v/r.V0)-r.k*v*v;const kg=F/(mu*G);return`<tr><td>${p} %</td><td class="n">${fmt(v,2)} m/s</td><td class="n">${kg>0?fmt(kg,1):'—'}</td><td class="n">${kg>0?fmt(kg/r.mass*100,0)+' %':'—'}</td><td>${use}</td></tr>`;}).join('')}</tbody></table></div>`;};
   sled();$('#fv-mu').addEventListener('input',sled);
   $('#fv-save').addEventListener('click',()=>addHistory({type:'fv',sum:{F0:r.F0,F0rel:r.F0rel,V0:r.V0,Pmax:r.Pmax,Prel:r.Prel,SFV:r.SFV,RFmax:r.RFmax,DRF:r.DRF,vmax:r.vm,tau:r.tau,r2:r.r2,orient:r.adv.orient},splits:r.splits.map(s=>({d:s.d,t:s.t}))}));
   $('#fv-pdf').addEventListener('click',()=>makePDF(['fv'],{fvCurrent:r}));
+  $('#fv-xlsx').addEventListener('click',()=>makeXLSX(['fv'],{fvCurrent:r}));
   $('#fv-csv').addEventListener('click',()=>{const L=[['Deportista',a.name],['Fecha',new Date().toLocaleString()],['Masa (kg)',a.mass],['Estatura (m)',a.height],['F0 (N)',fmt(r.F0,1)],['F0 (N/kg)',fmt(r.F0rel,3)],['V0 (m/s)',fmt(r.V0,3)],['Pmax (W)',fmt(r.Pmax,1)],['Pmax (W/kg)',fmt(r.Prel,2)],['SFV (N.s/m)',fmt(r.SFV,2)],['RFmax (%)',fmt(r.RFmax,2)],['DRF (%.s/m)',fmt(r.DRF,3)],['Vmax (m/s)',fmt(r.vm,3)],['Tau (s)',fmt(r.tau,3)],['R2',fmt(r.r2,4)],[],['Distancia (m)','Medido (s)','Modelo (s)','v (m/s)'],...r.splits.map(s=>[s.d,fmt(s.t,3),fmt(s.tm,3),fmt(s.v,3)])];
     saveFile(`perfil_FV_${a.name.replace(/\s+/g,'_')}.csv`,L.map(x=>x.join(';')).join('\n'));});
   drawFVCharts(r);
@@ -1178,13 +1181,14 @@ function pcRender(){const T=pcTest(),rows=pcRows(),el=$('#pc-res');const last=ro
   ${rows.length?`<div class="tbl-wrap"><table><thead><tr><th>Imagen</th><th>Cruce</th><th class="n">Cuadro</th><th class="n">Tiempo (s)</th><th class="n">Parcial (s)</th><th>Ajuste</th></tr></thead><tbody>
   ${rows.map(r=>`<tr><td><img class="thumb" src="${r.c.thumb}" alt="Cruce en el cuadro ${r.c.f}"></td><td>${esc(r.label)}<br><span class="small muted">${r.c.auto?'automático':'manual'}</span></td><td class="n"><button class="chip" data-g="${r.c.f}">${r.c.f}</button></td><td class="n">${fmt(r.t,3)}</td><td class="n">${fmt(r.part,3)}</td><td><div class="row"><button class="btn sm" data-adj="${r.i}" data-d="-1" aria-label="Un cuadro antes">−1</button><button class="btn sm" data-adj="${r.i}" data-d="1" aria-label="Un cuadro después">+1</button><button class="btn sm" data-rm="${r.i}" aria-label="Borrar cruce">✕</button></div></td></tr>`).join('')}</tbody></table></div>`:'<p class="empty">Coloca la línea, sitúate en un cuadro con la línea despejada y pulsa «Analizar desde este cuadro». Las pruebas guardadas aparecen en Deportistas › Informe.</p>'}
   ${cod}
-  <div class="row"><button class="btn lane" id="pc-save" ${total==null?'disabled':''}>Guardar en el historial</button><button class="btn primary" id="pc-pdf" type="button">Informe PDF de fotocélula</button></div>`;
+  <div class="row"><button class="btn lane" id="pc-save" ${total==null?'disabled':''}>Guardar en el historial</button><button class="btn primary" id="pc-pdf" type="button">Informe PDF de fotocélula</button><button class="btn" id="pc-xlsx" type="button">Excel de fotocélula</button></div>`;
   $$('#pc-res [data-g]').forEach(b=>b.addEventListener('click',()=>pcVT.goto(+b.dataset.g)));
   $$('#pc-res [data-rm]').forEach(b=>b.addEventListener('click',()=>{pc.cross.splice(+b.dataset.rm,1);pcRender();pcVT.redraw();}));
   $$('#pc-res [data-adj]').forEach(b=>b.addEventListener('click',async()=>{const c=pc.cross[+b.dataset.adj];c.f=clamp(c.f+(+b.dataset.d),0,pcVT.nFrames-1);c.auto=false;await pcVT.goto(c.f);c.thumb=pcThumb(c.f);pc.cross.sort((a,b)=>a.f-b.f);pcRender();}));
   const codUp=()=>{const s=+(($('#pc-sprint')||{}).value);if($('#pc-cod'))$('#pc-cod').textContent=total!=null&&s>0?`Déficit de cambio de dirección: ${fmt(total-s,3)} s (${T.name} − sprint ${T.cod} m)`:'';};
   if(T.cod){$('#pc-sprint').addEventListener('input',codUp);codUp();}
   $('#pc-pdf').addEventListener('click',()=>makePDF(['pc']));
+  $('#pc-xlsx').addEventListener('click',()=>makeXLSX(['pc']));
   const sv=$('#pc-save');if(sv)sv.addEventListener('click',()=>{const s=T.cod?+$('#pc-sprint').value:null;addHistory({type:'pc',test:T.name,sum:{total,dist:T.dist,v:T.dist&&total?T.dist/total:null,cod:s>0?total-s:null,fps:pcVT.capFps},rows:rows.map(r=>({label:r.label,t:r.t,part:r.part}))});});}
 
 /* ===================== DEPORTISTAS ===================== */
@@ -1527,6 +1531,67 @@ $('#bio-pdf').addEventListener('click',()=>makePDF(['bio']));
 $('#prog-pdf').addEventListener('click',()=>makePDF(['prog']));
 if(NATIVE){try{$('#app-card').hidden=false;$('#app-ver').textContent='AVD Sprint '+window.AVDNative.version();
   if(!window.AVDNative.canUpdate())$('#app-upd').hidden=true;$('#app-upd').addEventListener('click',()=>window.AVDNative.checkUpdates());}catch(e){}}
+
+/* ===================== EXCEL ===================== */
+const XFMT='AVD-SPRINT-1';
+const xTxt=t=>String(t??'').replace(/<[^>]+>/g,'').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>');
+const r3=v=>v!=null&&Number.isFinite(v)?Math.round(v*1000)/1000:'';
+const r2=v=>v!=null&&Number.isFinite(v)?Math.round(v*100)/100:'';
+const r1=v=>v!=null&&Number.isFinite(v)?Math.round(v*10)/10:'';
+const isoDay=d=>{const x=new Date(d);return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,'0')}-${String(x.getDate()).padStart(2,'0')}`;};
+function fvRowsFor(a,extra){
+  const list=history.filter(h=>h.athleteId===a.id&&h.type==='fv').slice().sort((x,y)=>x.date.localeCompare(y.date)).map(h=>({date:h.date,sum:h.sum,splits:h.splits||[],note:h.note||''}));
+  if(extra){const r=extra;list.push({date:new Date().toISOString(),current:true,splits:r.splits.map(s=>({d:s.d,t:s.t})),note:'',
+    sum:{F0:r.F0,F0rel:r.F0rel,V0:r.V0,Pmax:r.Pmax,Prel:r.Prel,SFV:r.SFV,RFmax:r.RFmax,DRF:r.DRF,vmax:r.vm,tau:r.tau,r2:r.r2,orient:r.adv?r.adv.orient:fvAdvice(r,a.sex).orient}});}
+  return list;}
+function fvSheetRows(athList,extraFor){
+  const dists=new Set();const items=[];
+  athList.forEach(a=>fvRowsFor(a,extraFor&&extraFor.id===a.id?extraFor.r:null).forEach(x=>{x.splits.forEach(s=>dists.add(s.d));items.push({a,x});}));
+  const D=[...dists].sort((p,q)=>p-q);const ori={force:'Fuerza',vel:'Velocidad',bal:'Equilibrado'};
+  return items.map(({a,x})=>{const s=x.sum||{},row={'Deportista':a.name,'Fecha':isoDay(x.date),'Sexo':a.sex==='F'?'F':'M','Masa (kg)':r1(a.mass),'Estatura (m)':r2(a.height)};
+    D.forEach(d=>{const sp=x.splits.find(q=>q.d===d);row[`t ${d} m (s)`]=sp?r3(sp.t):'';});
+    Object.assign(row,{'F0 (N)':r1(s.F0),'F0 (N/kg)':r2(s.F0rel),'V0 (m/s)':r2(s.V0),'Pmax (W)':r1(s.Pmax),'Pmax (W/kg)':r2(s.Prel),'SFV (N.s/m)':r2(s.SFV),'RFmax (%)':r1(s.RFmax),'DRF (%.s/m)':r3(s.DRF),'Vmax (m/s)':r2(s.vmax),'Tau (s)':r3(s.tau),'R2':s.r2!=null?Math.round(s.r2*10000)/10000:'','Orientación':ori[s.orient]||'','Nota':x.note||'','Fuente':'AVD Sprint'});
+    return row;});}
+function addSheet(wb,name,rows,widths){const X=window.XLSX;const ws=rows.length?X.utils.json_to_sheet(rows):X.utils.aoa_to_sheet([['Sin datos guardados']]);
+  if(rows.length){const keys=Object.keys(rows[0]);ws['!cols']=keys.map(k=>({wch:Math.max(widths||10,Math.min(42,Math.max(k.length,...rows.map(r=>String(r[k]??'').length))+2))}));ws['!autofilter']={ref:ws['!ref']};}
+  X.utils.book_append_sheet(wb,ws,name);}
+async function makeXLSX(sections,opts={}){
+  const X=window.XLSX;if(!X){toast('No se pudo cargar el generador de Excel. Revisa la conexión e inténtalo de nuevo.');return;}
+  const team=!!opts.team,a=cur(),aths=team?athletes:[a];const P=progressNotes(a),{fvs,pcs,bios}=P;
+  const wb=X.utils.book_new();wb.Props={Title:'AVD Sprint',Author:'AVD Sprint',CreatedDate:new Date()};
+  const info=[['AVD Sprint · resultados de evaluación'],[],['Formato',XFMT],['Generado',new Date().toLocaleString('es')],['Deportista',team?`Plantel (${aths.length})`:a.name],['Pruebas',sections.map(x=>({fv:'Perfil F-V horizontal',bio:'Biomecánica',pc:'Fotocélula',prog:'Progreso'})[x]).join(', ')],[],
+    ['Para importar en AVD Entrenador: Perfil fuerza-velocidad › Horizontal › Importar Excel de AVD Sprint. Se lee la hoja «Perfil F-V».']];
+  const wsI=X.utils.aoa_to_sheet(info);wsI['!cols']=[{wch:16},{wch:60}];X.utils.book_append_sheet(wb,wsI,'AVD Sprint');
+  let n=0;
+  if(sections.includes('fv')){const rows=fvSheetRows(aths,opts.fvCurrent?{id:a.id,r:opts.fvCurrent}:null);n+=rows.length;addSheet(wb,'Perfil F-V',rows);
+    if(!team&&(opts.fvCurrent||fvs.length)){const h=fvs[fvs.length-1];const r=opts.fvCurrent||(h&&h.splits&&h.splits.length>=3?computeFV({ds:h.splits.map(s=>s.d),ts:h.splits.map(s=>s.t),mass:a.mass,height:a.height,T:20,Pb:760,wind:0}):null);
+      if(r){addSheet(wb,'Curva F-V',r.pts.map(p=>({'t (s)':r2(p.t),'v (m/s)':r3(p.v),'a (m/s2)':r3(p.a),'F (N)':r1(p.F),'P (W)':r1(p.P),'RF (%)':r2(p.RF)})));
+        addSheet(wb,'Cargas trineo',[10,25,50,75].map(p=>{const v=r.vm*(1-p/100),F=r.F0*(1-v/r.V0)-r.k*v*v,kg=F/(0.35*G);return{'Pérdida de velocidad (%)':p,'Velocidad objetivo (m/s)':r2(v),'Carga mu 0,35 (kg)':kg>0?r1(kg):'','% masa':kg>0?r1(kg/r.mass*100):''};}));
+        const ad=fvAdvice(r,a.sex);addSheet(wb,'Conclusiones F-V',[...ad.c.map(t=>({'Tipo':'Conclusión','Texto':xTxt(t)})),...ad.rec.map(t=>({'Tipo':'Recomendación','Texto':xTxt(t)}))]);}}}
+  if(sections.includes('bio')){const rows=[],kin=[];aths.forEach(at=>history.filter(h=>h.athleteId===at.id&&h.type==='bio').slice().reverse().forEach(h=>{const s=h.sum||{};
+      rows.push({'Deportista':at.name,'Fecha':isoDay(h.date),'T. contacto (ms)':s.tc!=null?Math.round(s.tc*1000):'','T. vuelo (ms)':s.tf!=null?Math.round(s.tf*1000):'','Long. paso (m)':r2(s.sl),'Frecuencia (pasos/s)':r2(s.sf),'Velocidad pasos (m/s)':r2(s.v),'Velocidad A-B (m/s)':r2(s.vab),'Contactos':s.n??'','FPS':s.fps??'','Alertas técnicas':(h.kino||[]).reduce((q,r)=>q+(r.flags||[]).length,0),'Nota':h.note||''});
+      (h.kino||[]).forEach(r=>{const x=r.a||{},st=x.apoyo||'D',sw=st==='D'?'I':'D';kin.push({'Deportista':at.name,'Fecha':isoDay(h.date),'Posición':r.pos,'Pie de apoyo':st==='D'?'Derecho':'Izquierdo','Tronco (°)':r1(x.tronco),'Cadera apoyo (°)':r1(x['cadera'+st]),'Cadera libre (°)':r1(x['cadera'+sw]),'Rodilla apoyo (°)':r1(x['rodilla'+st]),'Rodilla libre (°)':r1(x['rodilla'+sw]),'Tibia apoyo (°)':r1(x['tibia'+st]),'Separación muslos (°)':r1(x.sep),'Pie-cadera (m)':r2(x['dpie'+st]),'Observaciones':(r.flags||[]).map(pdfTxt).join(' | ')});});}));
+    if(!team){const cr=contactRows();if(cr.length)addSheet(wb,'Contactos (análisis actual)',cr.map(r=>({'#':r.i,'Pie':r.leg==='D'?'Derecho':'Izquierdo','Cuadro apoyo':r.td,'Cuadro despegue':r.to??'','T. contacto (ms)':r.tc!=null?Math.round(r.tc*1000):'','T. vuelo (ms)':r.tf!=null?Math.round(r.tf*1000):'','Long. paso (m)':r2(r.sl),'Frecuencia (pasos/s)':r2(r.sf),'Velocidad (m/s)':r2(r.v)})));}
+    n+=rows.length;addSheet(wb,'Biomecánica',rows);addSheet(wb,'Kinograma',kin);}
+  if(sections.includes('pc')){const rows=[],cr=[];aths.forEach(at=>history.filter(h=>h.athleteId===at.id&&h.type==='pc').slice().reverse().forEach(h=>{const s=h.sum||{};
+      rows.push({'Deportista':at.name,'Fecha':isoDay(h.date),'Prueba':h.test,'Tiempo (s)':r3(s.total),'Distancia (m)':s.dist??'','Velocidad media (m/s)':r2(s.v),'Déficit COD (s)':r3(s.cod),'Parciales (s)':(h.rows||[]).filter(r=>r.part!=null).map(r=>r3(r.part)).join(' / '),'FPS':s.fps??'','Nota':h.note||''});
+      (h.rows||[]).forEach(r=>cr.push({'Deportista':at.name,'Fecha':isoDay(h.date),'Prueba':h.test,'Cruce':r.label,'Tiempo (s)':r3(r.t),'Parcial (s)':r3(r.part)}));}));
+    n+=rows.length;addSheet(wb,'Fotocélula',rows);addSheet(wb,'Cruces',cr);}
+  if(sections.includes('prog')&&!team){const rows=[];
+    FVM.forEach(m=>{if(fvs.length<1)return;const f=fvVals(fvs[0]),z=fvVals(fvs[fvs.length-1]),c=change(m,f[m.k],z[m.k]);rows.push({'Módulo':'Perfil F-V','Indicador':`${m.n} (${m.u})`,'Primera':r3(f[m.k]),'Última':r3(z[m.k]),'Cambio':c?r3(c.diff/(m.mul||1)):'','Cambio (%)':c?r1(c.pct):'','Estado':c?({up:'Mejora',down:'Empeora',flat:'Sin cambio claro'})[c.st]:''});});
+    if(bios.length)BIOM.forEach(m=>{const f=bios[0].sum,z=bios[bios.length-1].sum,c=change(m,f[m.k],z[m.k]);rows.push({'Módulo':'Biomecánica','Indicador':`${m.n} (${m.u})`,'Primera':f[m.k]!=null?r3(f[m.k]*(m.mul||1)):'','Última':z[m.k]!=null?r3(z[m.k]*(m.mul||1)):'','Cambio':c?r3(c.diff):'','Cambio (%)':c?r1(c.pct):'','Estado':c?({up:'Mejora',down:'Empeora',flat:'Sin cambio claro'})[c.st]:''});});
+    [...new Set(pcs.map(p=>p.test))].forEach(t=>{const l=pcs.filter(p=>p.test===t),m={n:'Tiempo',u:'s',d:3,dir:-1},c=change(m,l[0].sum.total,l[l.length-1].sum.total);rows.push({'Módulo':'Fotocélula','Indicador':`${t} (s)`,'Primera':r3(l[0].sum.total),'Última':r3(l[l.length-1].sum.total),'Cambio':c?r3(c.diff):'','Cambio (%)':c?r1(c.pct):'','Estado':c?({up:'Mejora',down:'Empeora',flat:'Sin cambio claro'})[c.st]:''});});
+    n+=rows.length;addSheet(wb,'Progreso',rows);addSheet(wb,'Retroalimentación',P.notes.map(x=>({'Módulo':x.mod,'Estado':({up:'Mejora',down:'Empeora',flat:'Se mantiene'})[x.st],'Detalle':xTxt(x.t)})));}
+  if(!n){toast(team?'Todavía no hay perfiles F-V guardados en el plantel.':'Este deportista todavía no tiene evaluaciones guardadas de esas pruebas.');return;}
+  const name=team?'plantel':a.name.replace(/[^\wÀ-ÿ]+/g,'_').replace(/_+$/,'');
+  const out=X.write(wb,{bookType:'xlsx',type:'array',compression:true});
+  await saveFile(`AVD-Sprint_${name}_${team?'perfil-FV':sections.length>1?'completo':sections[0]}_${isoDay(new Date())}.xlsx`,new Blob([out],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+}
+$('#xlsx-sel').addEventListener('click',()=>{const s=['fv','bio','pc','prog'].filter(k=>$('#pdf-'+k).checked);if(!s.length)return toast('Elige al menos una prueba.');makeXLSX(s);});
+$('#xlsx-all').addEventListener('click',()=>makeXLSX(['fv','bio','pc','prog']));
+$('#xlsx-team').addEventListener('click',()=>makeXLSX(['fv'],{team:true}));
+$('#bio-xlsx').addEventListener('click',()=>makeXLSX(['bio']));
+$('#prog-xlsx').addEventListener('click',()=>makeXLSX(['prog']));
 /* ===================== inicio ===================== */
 seedDemo();seedDemoV3();if(!athletes.find(a=>a.id===currentId))currentId=athletes[0].id;renderAthSel();buildTimeInputs(false);
 if(cur().id===DEMO.id){for(const d in DEMO_T){const i=$('#fv-t-'+d);if(i)i.value=DEMO_T[d];}}
