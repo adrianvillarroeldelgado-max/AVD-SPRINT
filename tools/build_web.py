@@ -22,6 +22,7 @@ SCRIPTS = {
     "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js": "lib/jspdf.umd.min.js",
     "https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js": "lib/jspdf.plugin.autotable.min.js",
     "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js": "lib/xlsx.full.min.js",
+    "https://cdn.jsdelivr.net/npm/mp4box@0.5.2/dist/mp4box.all.min.js": "lib/mp4box.all.min.js",
 }
 
 FONTS = [
@@ -54,7 +55,7 @@ def main() -> int:
         html = html.replace(url, local)
     html = re.sub(r'<link rel="preconnect" href="https://fonts\.googleapis\.com">\s*', "", html)
     html = re.sub(r'<link rel="stylesheet" href="https://fonts\.googleapis\.com/[^"]*">\s*', "", html)
-    left = re.findall(r'https://(?:cdnjs|fonts)\.[^"\']+', html)
+    left = re.findall(r'https://(?:cdnjs|fonts|cdn\.jsdelivr|unpkg)\.[^"\']+', html)
     if left:
         print("Error: quedan recursos externos: " + ", ".join(sorted(set(left))), file=sys.stderr)
         return 1
